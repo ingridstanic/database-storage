@@ -3,16 +3,24 @@ import mongoose from "mongoose";
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGODB_URI environment variable inside .env.local",
-  );
+  throw new Error("Please add MONGODB_URI to .env.local");
 }
 
-let cached = global.mongoose;
+type MongooseCache = {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+};
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+const globalForMongoose = globalThis as typeof globalThis & {
+  mongoose?: MongooseCache;
+};
+
+const cached = globalForMongoose.mongoose ?? {
+  conn: null,
+  promise: null,
+};
+
+globalForMongoose.mongoose = cached;
 
 export async function connectDB() {
   if (cached.conn) {
@@ -20,21 +28,16 @@ export async function connectDB() {
   }
 
   if (!cached.promise) {
-    const opts = {
+    cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-      return mongoose;
     });
   }
 
   try {
     cached.conn = await cached.promise;
-  } catch (e) {
+    return cached.conn;
+  } catch (error) {
     cached.promise = null;
-    throw e;
+    throw error;
   }
-
-  return cached.conn;
 }

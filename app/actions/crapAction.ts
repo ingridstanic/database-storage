@@ -1,8 +1,11 @@
 "use server";
+import { revalidatePath } from "next/cache";
 import { connectDB } from "../lib/db";
-import { Crap } from "../models/Crap";
+import { CrapModel } from "../models/CrapSchema";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
+import { Crap } from "../models/Crap";
+import { error } from "console";
 
 const crapSchema = z.object({
   text: z
@@ -23,9 +26,33 @@ export const storeCrap = async (formData: FormData) => {
 
   console.log("your crap is now stored!");
 
-  await Crap.create({
+  await CrapModel.create({
     id: uuidv4(),
     text: result.data?.text,
     isImportant: false,
   });
+  revalidatePath("/");
+};
+
+export const deleteCrap = async (formData: FormData) => {
+  await connectDB();
+  const crapid = formData.get("crapid");
+  await CrapModel.deleteOne({ id: crapid });
+  revalidatePath("/");
+};
+
+export const toggleCrap = async (formData: FormData) => {
+  await connectDB();
+  const crapid = formData.get("crapid") as string;
+
+  const foundCrap = await CrapModel.findOne({ id: crapid });
+
+  if (!foundCrap) {
+    throw new Error("Crap not found");
+  }
+
+  foundCrap.isImportant = !foundCrap.isImportant;
+  await foundCrap.save();
+
+  revalidatePath("/");
 };
